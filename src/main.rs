@@ -19,9 +19,11 @@ impl XStream for bytes::BytesMut {
 fn main() {
 
 	let n = Vc::VcNil;
+	let iout = Vc::VcInt {i: 12};
 	let mut b = BytesMut::new();
 	let mut s = n.xfer_out(&mut b).unwrap();
 	s += n.xfer_out(&mut b).unwrap();
+	s += iout.xfer_out(&mut b).unwrap();
 	
 println!("OUT {} {:?} ", s, b.freeze());
 }

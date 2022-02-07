@@ -1,5 +1,5 @@
 use std::result::Result;
-
+use std;
 // super simple version of xfer-rep parser
 // ref: serde, but this is just a learning project, so
 // avoiding it for now.
@@ -45,7 +45,23 @@ impl XferRep for i64 {
 	let p = x.out_want(2).unwrap();
 	p[0] = b'0';
 	p[1] = b'1';
-	Result::Ok(2)
+
+	let snum = format!("{}", self);
+	let bnum = snum.as_bytes();
+	let blen = bnum.len();
+	if blen > 99 {
+		return Result::Err(-1);
+	}
+
+	let p = x.out_want(blen + 2).unwrap();
+	p[0] = (blen / 10) as u8 + b'0';
+	p[1] = (blen % 10) as u8 + b'0';
+	let mut i = 0;
+	while i < blen {
+		p[i + 2] = bnum[i];
+		i += 1;
+	}
+	Result::Ok(blen + 2)
 	}
 
 	fn xfer_in(&self, x: & dyn XStream) -> Result<usize, XferErr> {
@@ -58,8 +74,8 @@ impl Vc {
 	match self {
 	Vc::VcNil => ().xfer_out(x),
 	Vc::VcInt {i} => i.xfer_out(x),
-	};
-	Result::Err(-1)
+	}
+	//Result::Err(-1)
 	}
 
 	pub fn xfer_in(&self, x: & dyn XStream) -> Result<usize, XferErr> {
