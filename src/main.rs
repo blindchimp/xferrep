@@ -1,6 +1,7 @@
 mod xferrep;
 use xferrep::{Vc, XStream, XferErr};
 use bytes::{BytesMut, BufMut};
+use std::vec;
 
 
 impl XStream for bytes::BytesMut {
@@ -20,10 +21,23 @@ fn main() {
 
 	let n = Vc::VcNil;
 	let iout = Vc::VcInt {i: 12};
+	let mut k: Vec<u8> = Vec::new();
+	k.push(b'a');
+
+	let sout = Vc::VcStr {s: k};
+	//let tmp = [n, iout, sout];
+	let mut v: Vec<Vc> = Vec::new();
+	v.push(n);
+	v.push(iout);
+	v.push(sout);
+	let subs = Vc::VcVec {vec: v};
 	let mut b = BytesMut::new();
-	let mut s = n.xfer_out(&mut b).unwrap();
-	s += n.xfer_out(&mut b).unwrap();
-	s += iout.xfer_out(&mut b).unwrap();
+	let mut s = 0;
+	// s += n.xfer_out(&mut b).unwrap();
+	//s += n.xfer_out(&mut b).unwrap();
+	//s += iout.xfer_out(&mut b).unwrap();
+	//s += sout.xfer_out(&mut b).unwrap();
+	s += subs.xfer_out(&mut b).unwrap();
 	
 println!("OUT {} {:?} ", s, b.freeze());
 }
