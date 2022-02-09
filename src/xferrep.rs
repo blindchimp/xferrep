@@ -1,5 +1,7 @@
 use std::result::Result;
 use ascii::{AsciiString, ToAsciiChar};
+use bytes::{Bytes, Buf};
+
 
 // super simple version of xfer-rep parser
 // ref: serde, but this is just a learning project, so
@@ -15,7 +17,7 @@ pub type XferErr = i32;
 
 pub trait XStream {
 	fn out_want<'a>(&mut self, s: usize) -> Result<&'a mut [u8], XferErr>;
-	fn in_want<'a>(&self, s: usize) -> Result<&'a [u8], XferErr>;
+	fn in_want(&mut self, s: usize) -> Result<Bytes, XferErr>;
 }
 
 trait XferRep {
@@ -148,7 +150,20 @@ impl Vc {
 	//Result::Err(-1)
 	}
 
-	pub fn xfer_in(&self, x: & dyn XStream) -> Result<usize, XferErr> {
+	// note: this api returns usize, but really the amount of data
+	// consumed is never used (anywhere i can see). rather it is just
+	// used as an error indicator. since i don't think rust is going to
+	// let us modify the type of "self" as we sorta do under the covers
+	// in c++, we'll just returns the enum value instead of the size.
+	pub fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> {
+		let tp = x.in_want(2).unwrap();
+		let tpc = tp.chunk();
+		let tpi = (tpc[0] - b'0') * 10 + (tpc[1] - b'0');
+		match tpi {
+		4 => return(Result::Ok(Vc::VcNil)),
+		_ => (),
+		};
+
 	Result::Err(-1)
 	}
 }

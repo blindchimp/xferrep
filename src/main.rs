@@ -1,6 +1,6 @@
 mod xferrep;
 use xferrep::{Vc, XStream, XferErr};
-use bytes::{BytesMut, BufMut};
+use bytes::{BytesMut, BufMut, Bytes, Buf};
 use std::vec;
 
 
@@ -12,9 +12,24 @@ impl XStream for bytes::BytesMut {
 	Result::Ok(unsafe { std::slice::from_raw_parts_mut(p, s)})
 	//Result::Err(-1)
 	}
-	fn in_want<'a>(&self, s: usize) -> Result<&'a [u8], XferErr> {
+	fn in_want(&mut self, s: usize) -> Result<Bytes, XferErr> {
 	Result::Err(-1)
 	}
+}
+
+impl XStream for bytes::Bytes {
+	fn out_want<'a>(&mut self, s: usize) -> Result<&'a mut [u8], XferErr> {
+		Result::Err(-1)
+	}
+
+	fn in_want(&mut self, s: usize) -> Result<Bytes, XferErr> {
+		if self.remaining() < s {
+			return Result::Err(-1);
+		}
+		let ret = self.copy_to_bytes(s);
+		Result::Ok(ret)
+	}
+
 }
 
 fn main() {
