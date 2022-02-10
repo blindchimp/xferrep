@@ -1,7 +1,15 @@
 use std::result::Result;
 use ascii::{AsciiString, ToAsciiChar};
 use bytes::{Bytes, Buf};
+use std::str;
 
+#[derive(Debug)]
+pub enum Vc {
+	VcNil,
+	VcInt {i: i64},
+	VcStr {s: Vec<u8>},
+	VcVec {vec: Vec<Vc>},
+}
 
 // super simple version of xfer-rep parser
 // ref: serde, but this is just a learning project, so
@@ -21,16 +29,10 @@ pub trait XStream {
 }
 
 trait XferRep {
-	fn xfer_in(&self, x: & dyn XStream) -> Result<usize, XferErr> ;
+	fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> ;
 	fn xfer_out(&self, x: &mut dyn XStream) -> Result<usize, XferErr> ;
 }
 
-pub enum Vc {
-	VcNil,
-	VcInt {i: i64},
-	VcStr {s: Vec<u8>},
-	VcVec {vec: Vec<Vc>},
-}
 
 impl XferRep for () {
 	fn xfer_out(&self, x: &mut dyn XStream) -> Result<usize, XferErr> {
@@ -40,8 +42,9 @@ impl XferRep for () {
 	Result::Ok(2)
 	}
 
-	fn xfer_in(&self, x: & dyn XStream) -> Result<usize, XferErr> {
-	Result::Err(-1)
+	fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> {
+		Result::Ok(Vc::VcNil)
+	//Result::Err(-1)
 	}
 }
 
@@ -69,8 +72,18 @@ impl XferRep for i64 {
 	Result::Ok(blen + 2)
 	}
 
-	fn xfer_in(&self, x: & dyn XStream) -> Result<usize, XferErr> {
-	Result::Err(-1)
+	fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> {
+		let lenab = x.in_want(2).unwrap();
+		let lena = lenab.chunk();
+		let lennum = (lena[0] - b'0') * 10 + (lena[1] - b'0');
+		
+		let numab = x.in_want(lennum as usize).unwrap();
+		let numa = numab.chunk();
+		// note: this isn't right, but we'll do it just for expediency
+		// right now. parse accepts more formats than we produce, which
+		// is an error.
+		let num = std::str::from_utf8(numa).unwrap().parse::<i64>().unwrap();
+		Result::Ok(Vc::VcInt {i: num})
 	}
 }
 
@@ -115,7 +128,7 @@ impl XferRep for Vec<u8> {
 
 		Result::Ok(buf.len())
 	}
-	fn xfer_in(&self, x: & dyn XStream) -> Result<usize, XferErr> {
+	fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> {
 		Result::Err(-1)
 		}
 }
@@ -134,7 +147,7 @@ impl XferRep for Vec<Vc> {
 		}
 		Result::Ok(tot)
 	}
-	fn xfer_in(&self, x: & dyn XStream) -> Result<usize, XferErr> {
+	fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> {
 		Result::Err(-1)
 		}
 }
@@ -151,7 +164,7 @@ impl Vc {
 	}
 
 	// note: this api returns usize, but really the amount of data
-	// consumed is never used (anywhere i can see). rather it is just
+	// consumed is never used (anywhere i can see in old code). rather it is just
 	// used as an error indicator. since i don't think rust is going to
 	// let us modify the type of "self" as we sorta do under the covers
 	// in c++, we'll just returns the enum value instead of the size.
@@ -160,7 +173,11 @@ impl Vc {
 		let tpc = tp.chunk();
 		let tpi = (tpc[0] - b'0') * 10 + (tpc[1] - b'0');
 		match tpi {
-		4 => return(Result::Ok(Vc::VcNil)),
+		4 => return Result::Ok(Vc::VcNil),
+		1 => {
+			let r: i64 = 0;
+			return Result::Ok(r.xfer_in(x).unwrap())
+		},
 		_ => (),
 		};
 

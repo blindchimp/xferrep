@@ -43,16 +43,19 @@ fn main() {
 	//let tmp = [n, iout, sout];
 	let mut v: Vec<Vc> = Vec::new();
 	v.push(n);
-	v.push(iout);
+	//v.push(iout);
 	v.push(sout);
 	let subs = Vc::VcVec {vec: v};
 	let mut b = BytesMut::new();
 	let mut s = 0;
 	// s += n.xfer_out(&mut b).unwrap();
 	//s += n.xfer_out(&mut b).unwrap();
-	//s += iout.xfer_out(&mut b).unwrap();
+	s += iout.xfer_out(&mut b).unwrap();
 	//s += sout.xfer_out(&mut b).unwrap();
-	s += subs.xfer_out(&mut b).unwrap();
+	//s += subs.xfer_out(&mut b).unwrap();
 	
-println!("OUT {} {:?} ", s, b.freeze());
+//println!("OUT {} {:?} ", s, b.freeze());
+	let invc: Vc = Vc::VcNil;
+	let ret = invc.xfer_in(&mut b.freeze()).unwrap();
+	println!("IN {:?}", ret);
 }
