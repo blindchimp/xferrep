@@ -1,7 +1,6 @@
 use std::result::Result;
 use ascii::{AsciiString, ToAsciiChar};
 use bytes::{Bytes, Buf};
-use std::str;
 
 #[derive(Debug)]
 pub enum Vc {
@@ -10,6 +9,11 @@ pub enum Vc {
 	VcStr {s: Vec<u8>},
 	VcVec {vec: Vec<Vc>},
 }
+
+const VCNIL: Vc = Vc::VcNil;
+const VCINTZERO: Vc = Vc::VcInt{i: 0};
+const VCVECEMPTY: Vc = Vc::VcVec{vec: Vec::new()};
+const VCSTREMPTY: Vc = Vc::VcStr{s: Vec::new()};
 
 // super simple version of xfer-rep parser
 // ref: serde, but this is just a learning project, so
@@ -33,26 +37,22 @@ trait XferRep {
 	fn xfer_out(&self, x: &mut dyn XStream) -> Result<usize, XferErr> ;
 }
 
-
 impl XferRep for () {
 	fn xfer_out(&self, x: &mut dyn XStream) -> Result<usize, XferErr> {
 	let p = x.out_want(2).unwrap();
-	p[0] = b'0';
-	p[1] = b'4';
+	Vc::type_out(&VCNIL, p);
 	Result::Ok(2)
 	}
 
 	fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> {
 		Result::Ok(Vc::VcNil)
-	//Result::Err(-1)
 	}
 }
 
 impl XferRep for i64 {
 	fn xfer_out(&self, x: &mut dyn XStream) -> Result<usize, XferErr> {
 	let p = x.out_want(2).unwrap();
-	p[0] = b'0';
-	p[1] = b'1';
+	Vc::type_out(&VCINTZERO, p);
 
 	let snum = format!("{}", self);
 	let bnum = snum.as_bytes();
@@ -112,9 +112,8 @@ impl XferRep for Vec<u8> {
 		let ret = res.as_bytes();
 		let outstr = self.as_slice();
 
-		let mut buf = x.out_want(2 + ret.len() + outstr.len()).unwrap();
-		buf[0] = b'0';
-		buf[1] = b'2';
+		let buf = x.out_want(2 + ret.len() + outstr.len()).unwrap();
+		Vc::type_out(&VCSTREMPTY, buf);
 		let mut i = 0;
 		while i < ret.len() {
 			buf[i + 2] = ret[i];
@@ -135,10 +134,8 @@ impl XferRep for Vec<u8> {
 
 impl XferRep for Vec<Vc> {
 	fn xfer_out(&self, x: &mut dyn XStream) -> Result<usize, XferErr> {
-		let b = x.out_want(3).unwrap();
-		b[0] = b'v';
-		b[1] = b'e';
-		b[2] = b'c';
+		let b = x.out_want(2).unwrap();
+		Vc::type_out(&VCVECEMPTY, b);
 		let mut i = 0;
 		let mut tot = 3;
 		while i < self.len() {
@@ -163,7 +160,7 @@ impl Vc {
 	//Result::Err(-1)
 	}
 
-	// note: this api returns usize, but really the amount of data
+	// note: this api in c++ returns usize, but really the amount of data
 	// consumed is never used (anywhere i can see in old code). rather it is just
 	// used as an error indicator. since i don't think rust is going to
 	// let us modify the type of "self" as we sorta do under the covers
@@ -182,5 +179,27 @@ impl Vc {
 		};
 
 	Result::Err(-1)
+	}
+
+	fn type_out(&self, b: &mut [u8]) -> () {
+		match self {
+			Vc::VcNil => {
+				b[0] = b'0';
+				b[1] = b'4';
+			},
+			Vc::VcInt { .. } => {
+				b[0] = b'0';
+				b[1] = b'1';
+			},
+			Vc::VcStr { .. } => {
+				b[0] = b'0';
+				b[1] = b'2';
+			},
+			Vc::VcVec { .. } => {
+				b[0] = b'0';
+				b[1] = b'9';
+			},
+			//_ => (),
+		}
 	}
 }
