@@ -15,6 +15,9 @@ pub const VCINTZERO: Vc = Vc::VcInt { i: 0 };
 pub const VCVECEMPTY: Vc = Vc::VcVec { vec: Vec::new() };
 pub const VCSTREMPTY: Vc = Vc::VcStr { s: Vec::new() };
 
+// we know what this is, right? hard WINK.
+const ZERO:u8 = 48u8;
+
 // super simple version of xfer-rep parser
 // ref: serde, but this is just a learning project, so
 // avoiding it for now.
@@ -62,8 +65,8 @@ impl XferRep for i64 {
         }
 
         let p = x.out_want(blen + 2).unwrap();
-        p[0] = (blen / 10) as u8 + b'0';
-        p[1] = (blen % 10) as u8 + b'0';
+        p[0] = (blen / 10) as u8 + ZERO;
+        p[1] = (blen % 10) as u8 + ZERO;
         let mut i: usize = 0;
         while i < blen {
             p[i + 2] = bnum[i];
@@ -75,13 +78,13 @@ impl XferRep for i64 {
     fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> {
         let lenab = x.in_want(2).unwrap();
         let lena = lenab.chunk();
-        let lennum = (lena[0] - b'0') * 10 + (lena[1] - b'0');
+        let lennum = (lena[0] - ZERO) * 10 + (lena[1] - ZERO);
 
         let numab = x.in_want(lennum as usize).unwrap();
         let numa = numab.chunk();
         // note: this isn't right, but we'll do it just for expediency
         // right now. parse accepts more formats than we produce, which
-        // is an error.
+        // is a bug.
         let num = std::str::from_utf8(numa).unwrap().parse::<i64>().unwrap();
         Result::Ok(Vc::VcInt { i: num })
     }
@@ -94,14 +97,22 @@ fn encode_long(num: u64) -> AsciiString {
     let lenlen = anum.len();
 
     let mut ret = AsciiString::new();
-    ret.push(((lenlen / 10) as u8 + b'0').to_ascii_char().unwrap());
-    ret.push(((lenlen % 10) as u8 + b'0').to_ascii_char().unwrap());
+    ret.push(((lenlen / 10) as u8 + ZERO).to_ascii_char().unwrap());
+    ret.push(((lenlen % 10) as u8 + ZERO).to_ascii_char().unwrap());
 
     let lenstr = AsciiString::from_ascii(format!("{}", lenlen)).unwrap();
     ret.push_str(&lenstr);
     ret.push_str(&anum);
 
     ret
+}
+
+// note: this isn't right, but we'll do it just for expediency
+// right now. parse accepts more formats than we produce, which
+// is a bug. and the input is not utf8
+fn decode_long(b: &[u8]) -> u64 {
+    let num = std::str::from_utf8(b).unwrap().parse::<u64>().unwrap();
+    num
 }
 
 impl XferRep for Vec<u8> {
@@ -126,16 +137,37 @@ impl XferRep for Vec<u8> {
         Result::Ok(buf.len())
     }
     fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> {
-        Result::Err(-1)
+        let tp = x.in_want(2).unwrap();
+        let tpc = tp.chunk();
+        let lenlen = (tpc[0] - ZERO) * 10 + (tpc[1] - ZERO);
+
+        let lenbuf = x.in_want(lenlen as usize).unwrap();
+        let strlen = decode_long(lenbuf.chunk());
+
+        let ss = x.in_want(strlen as usize).unwrap();
+
+        Result::Ok(Vc::VcStr { s: ss.to_vec() })
+
+
+        //Result::Err(-1)
     }
 }
 
 impl XferRep for Vec<Vc> {
     fn xfer_out(&self, x: &mut dyn XStream) -> Result<usize, XferErr> {
-        let b = x.out_want(2).unwrap();
-        Vc::type_out(&VCVECEMPTY, b);
+        let buf = x.out_want(2).unwrap();
+        Vc::type_out(&VCVECEMPTY, buf);
+
+        // number of elems in the vector
+        let res = encode_long(self.len() as u64);
+        let ret = res.as_bytes();
+
+        let buf2 = x.out_want(ret.len()).unwrap();
+        buf2.copy_from_slice(ret);
+
         let mut i = 0;
-        let mut tot = 3;
+        let mut tot = 2 + ret.len();
+        
         while i < self.len() {
             tot += self.get(i).unwrap().xfer_out(x).unwrap();
             i += 1;
@@ -166,13 +198,20 @@ impl Vc {
     pub fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> {
         let tp = x.in_want(2).unwrap();
         let tpc = tp.chunk();
-        let tpi = (tpc[0] - b'0') * 10 + (tpc[1] - b'0');
+        let tpi = (tpc[0] - ZERO) * 10 + (tpc[1] - ZERO);
         match tpi {
             4 => return Result::Ok(Vc::VcNil),
             1 => {
                 let r: i64 = 0;
                 return Result::Ok(r.xfer_in(x).unwrap());
-            }
+            },
+            2 => {
+                let r: Vec<u8> = Vec::new();
+                return Result::Ok(r.xfer_in(x).unwrap());
+            },
+            9 => {
+
+            },
             _ => (),
         };
 
@@ -182,20 +221,20 @@ impl Vc {
     fn type_out(&self, b: &mut [u8]) -> () {
         match self {
             Vc::VcNil => {
-                b[0] = b'0';
-                b[1] = b'4';
+                b[0] = ZERO;
+                b[1] = ZERO + 4;
             }
             Vc::VcInt { .. } => {
-                b[0] = b'0';
-                b[1] = b'1';
+                b[0] = ZERO;
+                b[1] = ZERO + 1;
             }
             Vc::VcStr { .. } => {
-                b[0] = b'0';
-                b[1] = b'2';
+                b[0] = ZERO;
+                b[1] = ZERO + 2;
             }
             Vc::VcVec { .. } => {
-                b[0] = b'0';
-                b[1] = b'9';
+                b[0] = ZERO;
+                b[1] = ZERO + 9;
             }
             //_ => (),
         }
