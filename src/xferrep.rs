@@ -15,7 +15,6 @@ pub const VCINTZERO: Vc = Vc::VcInt { i: 0 };
 pub const VCVECEMPTY: Vc = Vc::VcVec { vec: Vec::new() };
 pub const VCSTREMPTY: Vc = Vc::VcStr { s: Vec::new() };
 
-// we know what this is, right? hard WINK.
 const ZERO:u8 = 48u8;
 
 // super simple version of xfer-rep parser
@@ -147,9 +146,6 @@ impl XferRep for Vec<u8> {
         let ss = x.in_want(strlen as usize).unwrap();
 
         Result::Ok(Vc::VcStr { s: ss.to_vec() })
-
-
-        //Result::Err(-1)
     }
 }
 
@@ -200,8 +196,8 @@ impl Vc {
             Vc::VcInt { i } => i.xfer_out(x),
             Vc::VcStr { s } => s.xfer_out(x),
             Vc::VcVec { vec } => vec.xfer_out(x),
+            _ => Result::Err(-1),
         }
-        //Result::Err(-1)
     }
 
     // note: this api in c++ returns usize, but really the amount of data
