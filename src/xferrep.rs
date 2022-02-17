@@ -100,8 +100,8 @@ fn encode_long(num: u64) -> AsciiString {
     ret.push(((lenlen / 10) as u8 + ZERO).to_ascii_char().unwrap());
     ret.push(((lenlen % 10) as u8 + ZERO).to_ascii_char().unwrap());
 
-    let lenstr = AsciiString::from_ascii(format!("{}", lenlen)).unwrap();
-    ret.push_str(&lenstr);
+    //let lenstr = AsciiString::from_ascii(format!("{}", lenlen)).unwrap();
+    //ret.push_str(&lenstr);
     ret.push_str(&anum);
 
     ret
@@ -175,7 +175,21 @@ impl XferRep for Vec<Vc> {
         Result::Ok(tot)
     }
     fn xfer_in(&self, x: &mut dyn XStream) -> Result<Vc, XferErr> {
-        Result::Err(-1)
+        let lenab = x.in_want(2).unwrap();
+        let lena = lenab.chunk();
+        let lennum = (lena[0] - ZERO) * 10 + (lena[1] - ZERO);
+        let lenbuf = x.in_want(lennum as usize).unwrap();
+        let veccnt = decode_long(lenbuf.chunk());
+
+        let mut i = 0;
+        let mut r: Vec<Vc> = Vec::new();
+        let v: Vc = Vc::VcNil;
+        while i < veccnt {
+            let e = v.xfer_in(x).unwrap();
+            r.push(e);
+            i += 1;
+        }
+        Result::Ok(Vc::VcVec{ vec: r })
     }
 }
 
@@ -210,7 +224,8 @@ impl Vc {
                 return Result::Ok(r.xfer_in(x).unwrap());
             },
             9 => {
-
+                let r: Vec<Vc> = Vec::new();
+                return Result::Ok(r.xfer_in(x).unwrap());
             },
             _ => (),
         };
